@@ -9,9 +9,9 @@ type Proposal @entity {
   start: BigInt!
   end: BigInt!
   executor: Bytes!
+  proposer: Bytes!
   votes: [Vote!]!
   voters: [Voter!]!
-  creator: Bytes!
   totalForVotes: BigInt!
   totalAgainstVotes: BigInt!
   open: Boolean!

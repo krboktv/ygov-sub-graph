@@ -1,6 +1,33 @@
-type ExampleEntity @entity {
+type TotalWeight @entity {
   id: ID!
-  count: BigInt!
-  id: BigInt! # uint256
-  creator: Bytes! # address
+  totalWeight: BigInt!
+  votersCount: BigInt!
+}
+
+type Proposal @entity {
+  id: ID!
+  start: BigInt!
+  end: BigInt!
+  executor: Bytes!
+  votes: [Vote!]!
+  voters: [Voter!]!
+  creator: Bytes!
+  totalForVotes: BigInt!
+  totalAgainstVotes: BigInt!
+  open: Boolean!
+}
+
+type Vote @entity {
+  id: ID!  # proposal id + voter address + vote
+  voter: Voter!
+  vote: Boolean!
+  weight: BigInt!
+  proposal: Proposal! @derivedFrom(field: "votes")
+}
+
+type Voter @entity {
+  id: ID! # voter address
+  voteCount: BigInt!
+  weight: BigInt!
+  votes: [Vote!]! @derivedFrom(field: "voter")
 }

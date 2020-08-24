@@ -1,105 +1,137 @@
-import { BigInt } from "@graphprotocol/graph-ts"
+import { BigInt, store } from "@graphprotocol/graph-ts"
 import {
-  Contract,
-  NewProposal,
-  OwnershipTransferred,
-  ProposalFinished,
-  RegisterVoter,
-  RevokeVoter,
-  RewardAdded,
-  RewardPaid,
   Staked,
+  Withdrawn,
   Vote,
-  Withdrawn
-} from "../generated/Contract/Contract"
-import { ExampleEntity } from "../generated/schema"
+  NewProposal,
+  ProposalFinished, RegisterVoter, RevokeVoter
+} from '../generated/Contract/Contract'
+import { TotalWeight, Proposal, Vote as VoteEntity, Voter } from "../generated/schema"
+import { BI_ZERO, BI_ONE, generateVoteId } from './helpers'
 
 export function handleNewProposal(event: NewProposal): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
-
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (entity == null) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
-
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
-  }
-
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
-
-  // Entity fields can be set based on event parameters
-  entity.id = event.params.id
+  let entity = new Proposal(event.params.id.toString())
   entity.creator = event.params.creator
-
-  // Entities can be written to the store with `.save()`
+  entity.start = event.params.start
+  entity.end = event.params.start.plus(event.params.duration)
+  entity.executor = event.params.executor
+  entity.votes = []
+  entity.totalForVotes = BI_ZERO
+  entity.totalAgainstVotes = BI_ZERO
+  entity.open = true
   entity.save()
-
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.DURATION(...)
-  // - contract.balanceOf(...)
-  // - contract.breaker(...)
-  // - contract.config(...)
-  // - contract.earned(...)
-  // - contract.getStats(...)
-  // - contract.governance(...)
-  // - contract.isOwner(...)
-  // - contract.lastTimeRewardApplicable(...)
-  // - contract.lastUpdateTime(...)
-  // - contract.lock(...)
-  // - contract.minimum(...)
-  // - contract.owner(...)
-  // - contract.period(...)
-  // - contract.periodFinish(...)
-  // - contract.proposalCount(...)
-  // - contract.proposals(...)
-  // - contract.quorum(...)
-  // - contract.rewardPerToken(...)
-  // - contract.rewardPerTokenStored(...)
-  // - contract.rewardRate(...)
-  // - contract.rewards(...)
-  // - contract.token(...)
-  // - contract.totalSupply(...)
-  // - contract.totalVotes(...)
-  // - contract.userRewardPerTokenPaid(...)
-  // - contract.vote(...)
-  // - contract.voteLock(...)
-  // - contract.voters(...)
-  // - contract.votes(...)
-  // - contract.votesOf(...)
 }
 
-export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
+export function handleProposalFinished(event: ProposalFinished): void {
+  let entity = Proposal.load(event.params.id.toString())
+  entity.open = false
+  entity.save()
+}
 
-export function handleProposalFinished(event: ProposalFinished): void {}
+export function handleRegisterVoter(event: RegisterVoter): void {
+  let voter = new Voter(event.params.voter.toHexString())
+  voter.voteCount = BI_ZERO
+  voter.votes = []
+  voter.weight = event.params.votes
+  voter.save()
 
-export function handleRegisterVoter(event: RegisterVoter): void {}
+  let totalWeight = TotalWeight.load('0')
+  if (totalWeight == null) {
+    totalWeight = new TotalWeight('0')
+    totalWeight.votersCount = BI_ZERO
+  }
+  totalWeight.totalWeight = event.params.totalVotes
+  totalWeight.votersCount = totalWeight.votersCount.plus(BI_ONE)
+  totalWeight.save()
+}
 
-export function handleRevokeVoter(event: RevokeVoter): void {}
+export function handleRevokeVoter(event: RevokeVoter): void {
+  let totalWeight = TotalWeight.load('0')
+  totalWeight.totalWeight = event.params.totalVotes
+  totalWeight.save()
 
-export function handleRewardAdded(event: RewardAdded): void {}
+  let voter = new Voter(event.params.voter.toHexString())
+  voter.weight = BI_ZERO
+  voter.save()
+}
 
-export function handleRewardPaid(event: RewardPaid): void {}
+export function handleVote(event: Vote): void {
+  let prop = Proposal.load(event.params.id.toString());
 
-export function handleStaked(event: Staked): void {}
+  let vote = new VoteEntity(generateVoteId(event, event.params.vote));
+  vote.proposal = prop.id
+  vote.vote = event.params.vote
+  vote.voter = event.params.voter.toHexString()
+  vote.weight = event.params.weight
 
-export function handleVote(event: Vote): void {}
+  let voter = Voter.load(event.params.voter.toHexString())
+  voter.voteCount = voter.voteCount.plus(BI_ONE)
 
-export function handleWithdrawn(event: Withdrawn): void {}
+  let voterVotes = voter.votes
+  voterVotes.push(vote.id)
+
+  let propVotes = prop.votes
+  propVotes.push(vote.id)
+
+  let oppositeVoteId = generateVoteId(event, !event.params.vote)
+  let oppositeVote = VoteEntity.load(oppositeVoteId)
+  if (oppositeVote != null) {
+    voterVotes = voterVotes.splice(voterVotes.indexOf(oppositeVoteId), 1)
+    propVotes = propVotes.splice(propVotes.indexOf(oppositeVoteId), 1)
+    voter.voteCount = voter.voteCount.minus(BI_ONE)
+    store.remove('Vote', oppositeVoteId)
+  } else {
+    let propVoters = prop.voters
+    propVoters.push(voter.id)
+    prop.voters = propVoters
+  }
+
+  voter.votes = voterVotes
+  prop.votes = propVotes
+
+  if (event.params.vote == true) {
+    prop.totalForVotes = prop.totalForVotes.plus(BI_ONE)
+    if (oppositeVote != null) {
+      prop.totalAgainstVotes = prop.totalAgainstVotes.minus(BI_ONE)
+    }
+  } else {
+    prop.totalAgainstVotes = prop.totalAgainstVotes.plus(BI_ONE)
+    if (oppositeVote != null) {
+      prop.totalForVotes = prop.totalForVotes.minus(BI_ONE)
+    }
+  }
+
+  prop.save()
+  voter.save()
+  vote.save()
+}
+
+export function handleStaked(event: Staked): void {
+  let voter = Voter.load(event.params.user.toHexString())
+  if (voter == null) {
+    return
+  }
+
+  let totalStakedEntity = TotalWeight.load('0')
+  if (totalStakedEntity == null) {
+    totalStakedEntity = new  TotalWeight('0')
+    totalStakedEntity.totalWeight = BI_ZERO
+  }
+  voter.weight = voter.weight.plus(event.params.amount)
+  totalStakedEntity.totalWeight = totalStakedEntity.totalWeight.plus(event.params.amount)
+  voter.save()
+  totalStakedEntity.save()
+}
+
+export function handleWithdrawn(event: Withdrawn): void {
+  let voter = Voter.load(event.params.user.toHexString())
+  if (voter == null) {
+    return
+  }
+
+  let totalStakedEntity = TotalWeight.load('0')
+  voter.weight = voter.weight.minus(event.params.amount)
+  totalStakedEntity.totalWeight = totalStakedEntity.totalWeight.minus(event.params.amount)
+  voter.save()
+  totalStakedEntity.save()
+}

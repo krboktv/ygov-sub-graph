@@ -1,4 +1,4 @@
-specVersion: 0.0.1
+specVersion: 0.0.2
 schema:
   file: ./schema.graphql
 dataSources:
@@ -8,18 +8,19 @@ dataSources:
     source:
       address: "0xba37b002abafdd8e89a1995da52740bbc013d992"
       abi: Contract
+      startBlock: 10553531
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.2
+      apiVersion: 0.0.4
       language: wasm/assemblyscript
       entities:
         - NewProposal
-        - OwnershipTransferred
+#        - OwnershipTransferred
         - ProposalFinished
         - RegisterVoter
         - RevokeVoter
-        - RewardAdded
-        - RewardPaid
+#        - RewardAdded
+#        - RewardPaid
         - Staked
         - Vote
         - Withdrawn
@@ -29,18 +30,18 @@ dataSources:
       eventHandlers:
         - event: NewProposal(uint256,address,uint256,uint256,address)
           handler: handleNewProposal
-        - event: OwnershipTransferred(indexed address,indexed address)
-          handler: handleOwnershipTransferred
+        # - event: OwnershipTransferred(indexed address,indexed address)
+        #   handler: handleOwnershipTransferred
         - event: ProposalFinished(indexed uint256,uint256,uint256,bool)
           handler: handleProposalFinished
         - event: RegisterVoter(address,uint256,uint256)
           handler: handleRegisterVoter
         - event: RevokeVoter(address,uint256,uint256)
           handler: handleRevokeVoter
-        - event: RewardAdded(uint256)
-          handler: handleRewardAdded
-        - event: RewardPaid(indexed address,uint256)
-          handler: handleRewardPaid
+        # - event: RewardAdded(uint256)
+        #   handler: handleRewardAdded
+        # - event: RewardPaid(indexed address,uint256)
+        #   handler: handleRewardPaid
         - event: Staked(indexed address,uint256)
           handler: handleStaked
         - event: Vote(indexed uint256,indexed address,bool,uint256)
